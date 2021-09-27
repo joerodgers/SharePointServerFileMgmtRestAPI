@@ -20,13 +20,21 @@ namespace SharePointServerFileMgmtRestAPI
         static readonly string _relativeUrl = "/sites/teamsite";
         static readonly string _folderPath  = "/sites/teamsite/Shared%20Documents";
 
+        // GetFolderByServerRelativeUrl and GetFileByServerRelativeUrl will allow support for SharePoint Server 2016
+
         // single file paths
-        static readonly string _uploadPath = $"{_relativeUrl}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{_folderPath}')/Files/Add(overwrite=true, url='{{0}}')";
+        static readonly string _uploadPath = $"{_relativeUrl}/_api/web/GetFolderByServerRelativeUrl('{_folderPath}')/Files/Add(overwrite=true, url='{{0}}')";
 
         // chunked file paths
-        static readonly string _startUploadPath    = $"{_relativeUrl}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{_folderPath}')/Files/AddStubUsingPath(DecodedUrl='{{0}}')/StartUpload(uploadId=guid'{{1}}')";
-        static readonly string _continueUploadPath = $"{_relativeUrl}/_api/web/GetFileByServerRelativePath(DecodedUrl='{_folderPath}/{{0}}')/ContinueUpload(uploadId=guid'{{1}}',fileOffset={{2}})";
-        static readonly string _finishUploadPath   = $"{_relativeUrl}/_api/web/GetFileByServerRelativePath(DecodedUrl='{_folderPath}/{{0}}')/FinishUpload(uploadId=guid'{{1}}',fileOffset={{2}})";
+        static readonly string _startUploadPath    = $"{_relativeUrl}/_api/web/GetFolderByServerRelativeUrl('{_folderPath}')/Files/AddStubUsingPath(DecodedUrl='{{0}}')/StartUpload(uploadId=guid'{{1}}')";
+        static readonly string _continueUploadPath = $"{_relativeUrl}/_api/web/GetFileByServerRelativeUrl('{_folderPath}/{{0}}')/ContinueUpload(uploadId=guid'{{1}}',fileOffset={{2}})";
+        static readonly string _finishUploadPath   = $"{_relativeUrl}/_api/web/GetFileByServerRelativeUrl('{_folderPath}/{{0}}')/FinishUpload(uploadId=guid'{{1}}',fileOffset={{2}})";
+
+        static readonly string _downloadPath = $"{_relativeUrl}/_api/web/GetFileByServerRelativeUrl('{{0}}')/$value";
+
+        static readonly string _recyclePath = $"{{0}}/recycle";
+
+        static readonly string _getListItemPath = $"{_relativeUrl}/_api/web/GetFileByServerRelativeUrl('{{0}}')/ListItemAllFields";
 
         // form digest path
         static readonly string _contextPath = "/sites/teamsite/_api/contextinfo";
@@ -56,6 +64,10 @@ namespace SharePointServerFileMgmtRestAPI
             UploadFile(_largeFilePath);
 
             UploadFile(_smallFilePath);
+
+            DownloadFile($"{_folderPath}/small.txt", @"C:\_temp\small.txt");
+
+            RecycleFile($"{_folderPath}/small.txt");
         }
 
         static void Init()
@@ -77,7 +89,41 @@ namespace SharePointServerFileMgmtRestAPI
                 _httpClient.DefaultRequestHeaders.Add("X-RequestDigest", GetFormDigestValue());
             }
         }
-        
+
+        static void DownloadFile(string webRelativeFileUrl, string path)
+        {
+            // start download
+            var bytes = _httpClient
+                .GetByteArrayAsync(string.Format(_downloadPath, webRelativeFileUrl))
+                .GetAwaiter()
+                .GetResult();
+
+            // write bytes to disk
+            System.IO.File.WriteAllBytes(path, bytes);
+        }
+
+        static void RecycleFile(string webRelativeFileUrl)
+        {
+            // get list item details based on the file url
+            var response = _httpClient
+                .GetAsync(string.Format(_getListItemPath, webRelativeFileUrl))
+                .GetAwaiter()
+                .GetResult();
+
+            // parse json response
+            dynamic parsed = JsonConvert.DeserializeObject<dynamic>(response.Content.ReadAsStringAsync().Result);
+
+            // pull the uri value uri=https://hnsc.2019.contoso.lab/sites/teamsite/_api/Web/Lists(guid'b73a2191-362d-47b6-9291-9ae9f43aaf00')/Items(30)
+            var itemUri = (string)parsed.d.__metadata.uri;
+
+            // execute recycle request
+            _ = _httpClient
+                .PostAsync(string.Format(_recyclePath, itemUri), null)
+                .GetAwaiter()
+                .GetResult()
+                .EnsureSuccessStatusCode();
+        }
+
         static void UploadFile(string path)
         {
             var fi = new System.IO.FileInfo(path);

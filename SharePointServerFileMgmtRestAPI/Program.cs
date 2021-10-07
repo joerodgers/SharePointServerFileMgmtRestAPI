@@ -34,6 +34,8 @@ namespace SharePointServerFileMgmtRestAPI
 
         static readonly string _recyclePath = $"{{0}}/recycle";
 
+        static readonly string _deletePath = $"{{0}}/deleteObject";
+
         static readonly string _getListItemPath = $"{_relativeUrl}/_api/web/GetFileByServerRelativeUrl('{{0}}')/ListItemAllFields";
 
         // form digest path
@@ -64,15 +66,17 @@ namespace SharePointServerFileMgmtRestAPI
             UploadFile(_largeFilePath);
 
             UploadFile(_smallFilePath);
-
+            
             DownloadFile($"{_folderPath}/small.txt", @"C:\_temp\small.txt");
 
             RecycleFile($"{_folderPath}/small.txt");
+
+            DeleteFile($"{_folderPath}/example.txt");
         }
 
         static void Init()
         {
-            if (null == _httpClient)
+            if( null == _httpClient)
             {
                 var httpClientHandler = new HttpClientHandler()
                 {
@@ -100,6 +104,28 @@ namespace SharePointServerFileMgmtRestAPI
 
             // write bytes to disk
             System.IO.File.WriteAllBytes(path, bytes);
+        }
+
+        static void DeleteFile(string webRelativeFileUrl)
+        {
+            // get list item details based on the file url
+            var response = _httpClient
+                .GetAsync(string.Format(_getListItemPath, webRelativeFileUrl))
+                .GetAwaiter()
+                .GetResult();
+
+            // parse json response
+            dynamic parsed = JsonConvert.DeserializeObject<dynamic>(response.Content.ReadAsStringAsync().Result);
+
+            // pull the uri value uri=https://hnsc.2019.contoso.lab/sites/teamsite/_api/Web/Lists(guid'b73a2191-362d-47b6-9291-9ae9f43aaf00')/Items(30)
+            var itemUri = (string)parsed.d.__metadata.uri;
+
+            // execute recycle request
+            _ = _httpClient
+                .PostAsync(string.Format(_deletePath, itemUri), null)
+                .GetAwaiter()
+                .GetResult()
+                .EnsureSuccessStatusCode();
         }
 
         static void RecycleFile(string webRelativeFileUrl)
@@ -142,7 +168,7 @@ namespace SharePointServerFileMgmtRestAPI
         {
             var fi = new System.IO.FileInfo(path);
 
-            if (fi.Length > TWO_HUNDRED_FIFTY_MB)
+            if( fi.Length > TWO_HUNDRED_FIFTY_MB)
             {
                 UploadLargeFile(path);
                 return;
@@ -177,7 +203,7 @@ namespace SharePointServerFileMgmtRestAPI
 
                 long offset   = 0;
                 int bytesRead = 0;
-
+                
                 var bytes = new byte[CHUNK_SIZE_BYTES];
 
                 do

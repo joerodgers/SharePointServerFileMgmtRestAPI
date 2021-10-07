@@ -20,13 +20,13 @@ namespace SharePointServerFileMgmtRestAPI
         static readonly string _relativeUrl = "/sites/teamsite";
         static readonly string _folderPath  = "/sites/teamsite/Shared%20Documents";
 
-        // GetFolderByServerRelativeUrl and GetFileByServerRelativeUrl will allow support for SharePoint Server 2016
+        // GetFolderByServerRelativeUrl, GetFileByServerRelativeUrl and GetByUrlOrAddStub will allow support for SharePoint Server 2016
 
         // single file paths
         static readonly string _uploadPath = $"{_relativeUrl}/_api/web/GetFolderByServerRelativeUrl('{_folderPath}')/Files/Add(overwrite=true, url='{{0}}')";
 
         // chunked file paths
-        static readonly string _startUploadPath    = $"{_relativeUrl}/_api/web/GetFolderByServerRelativeUrl('{_folderPath}')/Files/AddStubUsingPath(DecodedUrl='{{0}}')/StartUpload(uploadId=guid'{{1}}')";
+        static readonly string _startUploadPath = $"{_relativeUrl}/_api/web/GetFolderByServerRelativeUrl('{_folderPath}')/Files/GetByUrlOrAddStub('{{0}}')/StartUpload(uploadId=guid'{{1}}')";
         static readonly string _continueUploadPath = $"{_relativeUrl}/_api/web/GetFileByServerRelativeUrl('{_folderPath}/{{0}}')/ContinueUpload(uploadId=guid'{{1}}',fileOffset={{2}})";
         static readonly string _finishUploadPath   = $"{_relativeUrl}/_api/web/GetFileByServerRelativeUrl('{_folderPath}/{{0}}')/FinishUpload(uploadId=guid'{{1}}',fileOffset={{2}})";
 
@@ -72,7 +72,7 @@ namespace SharePointServerFileMgmtRestAPI
 
         static void Init()
         {
-            if( null == _httpClient)
+            if (null == _httpClient)
             {
                 var httpClientHandler = new HttpClientHandler()
                 {
@@ -142,7 +142,7 @@ namespace SharePointServerFileMgmtRestAPI
         {
             var fi = new System.IO.FileInfo(path);
 
-            if( fi.Length > TWO_HUNDRED_FIFTY_MB)
+            if (fi.Length > TWO_HUNDRED_FIFTY_MB)
             {
                 UploadLargeFile(path);
                 return;
@@ -177,7 +177,7 @@ namespace SharePointServerFileMgmtRestAPI
 
                 long offset   = 0;
                 int bytesRead = 0;
-                
+
                 var bytes = new byte[CHUNK_SIZE_BYTES];
 
                 do
